@@ -10,6 +10,13 @@
 #import "SVProgressHUD.h"
 #import <QuartzCore/QuartzCore.h>
 
+/*
+ * When greater than 0 a show will be delayed for that
+ * amount of time befiore the SVProgressHUD becomes
+ * visible.
+ */
+#define SVPROGRESSHUD_SHOW_DELAY_MSECS 400
+
 CGFloat SVProgressHUDRingRadius = 14;
 CGFloat SVProgressHUDRingThickness = 6;
 
@@ -17,6 +24,7 @@ CGFloat SVProgressHUDRingThickness = 6;
 
 @property (nonatomic, readwrite) SVProgressHUDMaskType maskType;
 @property (nonatomic, strong, readonly) NSTimer *fadeOutTimer;
+@property (nonatomic, assign) BOOL inShowDelay;
 
 @property (nonatomic, strong, readonly) UIWindow *overlayWindow;
 @property (nonatomic, strong, readonly) UIView *hudView;
@@ -57,7 +65,7 @@ CGFloat SVProgressHUDRingThickness = 6;
 
 @implementation SVProgressHUD
 
-@synthesize overlayWindow, hudView, maskType, fadeOutTimer, stringLabel, imageView, spinnerView, visibleKeyboardHeight;
+@synthesize overlayWindow, hudView, maskType, fadeOutTimer, stringLabel, imageView, spinnerView, visibleKeyboardHeight, inShowDelay;
 #if __IPHONE_OS_VERSION_MIN_REQUIRED >= 50000
 @synthesize hudBackgroundColor = _uiHudBgColor;
 @synthesize hudForegroundColor = _uiHudFgColor;
@@ -369,7 +377,25 @@ CGFloat SVProgressHUDRingThickness = 6;
 
 #pragma mark - Master show/dismiss methods
 
-- (void)showProgress:(float)progress status:(NSString*)string maskType:(SVProgressHUDMaskType)hudMaskType {
+- (void)showProgress:(float)progress status:(NSString *)string maskType:(SVProgressHUDMaskType)hudMaskType {
+    if(SVPROGRESSHUD_SHOW_DELAY_MSECS <= 0) {
+        [self realShowProgress:progress status:string maskType:hudMaskType];
+        return;
+    }
+    
+    self.inShowDelay = YES;
+    
+    double nanosecs = SVPROGRESSHUD_SHOW_DELAY_MSECS * 1.0e6;
+    dispatch_after( dispatch_time(DISPATCH_TIME_NOW, nanosecs),
+                   dispatch_get_main_queue(), ^{
+                       if(!self.inShowDelay) return; /* i.e. was dismissed in the meantime */
+                       self.inShowDelay = NO;
+                       [self realShowProgress:progress status:string maskType:hudMaskType];
+                   }
+                   );
+}
+
+- (void)realShowProgress:(float)progress status:(NSString*)string maskType:(SVProgressHUDMaskType)hudMaskType {
     if(!self.superview)
         [self.overlayWindow addSubview:self];
     
@@ -446,6 +472,11 @@ CGFloat SVProgressHUDRingThickness = 6;
 
 
 - (void)dismiss {
+    if(self.inShowDelay) {
+        self.inShowDelay = NO;
+        return;
+    };
+    
     [UIView animateWithDuration:0.15
                           delay:0
                         options:UIViewAnimationCurveEaseIn | UIViewAnimationOptionAllowUserInteraction
