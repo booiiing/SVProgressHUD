@@ -454,6 +454,24 @@ CGFloat SVProgressHUDRingThickness = 6;
 
 
 - (void)showImage:(UIImage *)image status:(NSString *)string duration:(NSTimeInterval)duration {
+    if(SVPROGRESSHUD_SHOW_DELAY_MSECS <= 0) {
+        [self realShowImage:image status:string duration:duration];
+        return;
+    }
+    
+    self.inShowDelay = YES;
+    
+    double nanosecs = SVPROGRESSHUD_SHOW_DELAY_MSECS * 1.0e6;
+    dispatch_after( dispatch_time(DISPATCH_TIME_NOW, nanosecs),
+                   dispatch_get_main_queue(), ^{
+                       if(!self.inShowDelay) return; /* i.e. was dismissed in the meantime */
+                       self.inShowDelay = NO;
+                       [self realShowImage:image status:string duration:duration];
+                   }
+                   );
+}
+
+- (void)realShowImage:(UIImage *)image status:(NSString *)string duration:(NSTimeInterval)duration {
     self.progress = -1;
     [self cancelRingLayerAnimation];
     
